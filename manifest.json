@@ -1,0 +1,16 @@
+{
+    "manifest_version": 3,
+    "name": "chat AI extension",
+    "description": "Extension for improving chat AI services",
+    "version": "0.1",
+    "content_scripts": [
+        {
+            "js": [
+                "scripts/gemini.js"
+            ],
+            "matches": [
+                "https://gemini.google.com/*"
+            ]
+        }
+    ]
+}
