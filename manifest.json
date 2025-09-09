@@ -5,12 +5,19 @@
     "version": "0.1",
     "content_scripts": [
         {
+            "matches": [
+                "https://gemini.google.com/*"
+            ],
             "js": [
                 "scripts/gemini.js"
             ],
-            "matches": [
-                "https://gemini.google.com/*"
-            ]
+            "css": ["styles.css"]
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [ "fonts/*.woff2" ],
+            "matches": [ "https://gemini.google.com/*" ]
         }
     ]
 }

@@ -1,0 +1,35 @@
+/* 1. 외부 @import를 지우고 로컬 폰트 파일을 직접 정의합니다. */
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 400;
+  src: url('chrome-extension://__MSG_@@extension_id__/fonts/material-symbols-outlined-latin-400-normal.woff2') format('woff2');
+}
+
+.custom-button-wrapper button {
+    padding: 4px;
+    border: 1px solid #dadce0;
+    border-radius: 50%;
+    background-color: white;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+    overflow: hidden; /* 글자가 넘치면 보이지 않게 처리 */
+}
+
+.custom-button-wrapper button:hover {
+    background-color: #f8f9fa;
+}
+
+.custom-button-wrapper .material-symbols-outlined {
+    /* 2. 정의한 폰트를 사용하도록 지정합니다. */
+    font-family: 'Material Symbols Outlined', sans-serif;
+    font-size: 20px;
+    color: #444746;
+    /* font-family가 적용되면 아래 속성들은 자동으로 처리되므로, 
+       텍스트 숨김 트릭은 더 이상 필요 없습니다. */
+}
