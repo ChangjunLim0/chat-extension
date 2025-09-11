@@ -1,35 +1,92 @@
-/* 1. 외부 @import를 지우고 로컬 폰트 파일을 직접 정의합니다. */
 @font-face {
-  font-family: 'Material Symbols Outlined';
-  font-style: normal;
-  font-weight: 400;
-  src: url('chrome-extension://__MSG_@@extension_id__/fonts/material-symbols-outlined-latin-400-normal.woff2') format('woff2');
+    font-family: 'Material Symbols Outlined';
+    font-style: normal;
+    font-weight: 400;
+    src: url('chrome-extension://__MSG_@@extension_id__/fonts/material-symbols-outlined-latin-400-normal.woff2') format('woff2');
 }
 
-.custom-button-wrapper button {
+/* 질문 입력창 옆에 추가될 버튼의 스타일 */
+.scroll-to-question-outer-btn {
+    position: absolute;
+    bottom: 12px;
+    right: -60px;
+    z-index: 1000;
+
     padding: 4px;
     border: 1px solid #dadce0;
     border-radius: 50%;
     background-color: white;
     cursor: pointer;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     transition: background-color 0.2s;
-    overflow: hidden; /* 글자가 넘치면 보이지 않게 처리 */
+    user-select: none;
 }
 
-.custom-button-wrapper button:hover {
+.scroll-to-question-outer-btn:hover {
     background-color: #f8f9fa;
 }
 
-.custom-button-wrapper .material-symbols-outlined {
-    /* 2. 정의한 폰트를 사용하도록 지정합니다. */
+.scroll-to-question-outer-btn .material-symbols-outlined {
     font-family: 'Material Symbols Outlined', sans-serif;
     font-size: 20px;
     color: #444746;
-    /* font-family가 적용되면 아래 속성들은 자동으로 처리되므로, 
-       텍스트 숨김 트릭은 더 이상 필요 없습니다. */
+}
+
+body.dark-theme .scroll-to-question-outer-btn {
+    background-color: #1e1f20;
+    border-color: #5f6368;
+}
+
+body.dark-theme .scroll-to-question-outer-btn:hover {
+    background-color: #333537;
+}
+
+body.dark-theme .scroll-to-question-outer-btn .material-symbols-outlined {
+    color: #e8eaed;
+}
+
+body.dark-theme .scroll-to-question-outer-btn:disabled {
+    background-color: #1e1f20;
+    opacity: 0.4;
+}
+
+/* 상단 바에 추가될 질문 표시 영역 스타일 */
+#top-bar-question-display {
+    padding: 10px 24px;
+    background-color: #e9eef6;
+    color: #3c4043;
+    font-size: 16px;
+    border-radius: 24px;
+
+    position: absolute;
+    box-sizing: border-box;
+
+    vertical-align: middle;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+#top-bar-question-display.visible {
+    opacity: 1;
+    height: auto;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+body.dark-theme #top-bar-question-display {
+    background-color: #333537;
+    color: #e8eaed;
 }
