@@ -3,6 +3,9 @@
     "name": "chat AI extension",
     "description": "Extension for improving chat AI services",
     "version": "0.1",
+    "permissions": [
+        "storage"
+    ],
     "content_scripts": [
         {
             "matches": [
@@ -11,13 +14,22 @@
             "js": [
                 "scripts/gemini.js"
             ],
-            "css": ["styles.css"]
+            "css": [
+                "styles.css"
+            ]
         }
     ],
     "web_accessible_resources": [
         {
-            "resources": [ "fonts/*.woff2" ],
-            "matches": [ "https://gemini.google.com/*" ]
+            "resources": [
+                "fonts/*.woff2"
+            ],
+            "matches": [
+                "https://gemini.google.com/*"
+            ]
         }
-    ]
+    ],
+    "action": {
+        "default_popup": "popup/popup.html"
+    }
 }
