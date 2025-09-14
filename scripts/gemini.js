@@ -5,7 +5,8 @@ let mainResizeObserver = null;
 const elementVisibility = new Map();
 const components = {
     scrollButton: null,
-    topBarQuestion: null
+    topBarQuestion: null,
+    topBarTextSpan: null
 }
 const observers = {
     resize: null,
@@ -72,8 +73,13 @@ function createTopBarDisplay() {
     if (!topBar) return;
     const display = document.createElement('div');
     display.id = 'top-bar-question-display';
+    const textSpan = document.createElement('span');
+    textSpan.className = 'text-span';
+    display.appendChild(textSpan);
+
     topBar.prepend(display);
     components.topBarQuestion = display;
+    components.topBarTextSpan = textSpan;
 }
 
 function syncTopBarPosition() {
@@ -121,7 +127,9 @@ function updateTopBarVisibility() {
         }
     }
     if (textToShow) {
-        components.topBarQuestion.innerText = textToShow;
+        if (components.topBarTextSpan) {
+            components.topBarTextSpan.innerText = textToShow;
+        }
         components.topBarQuestion.classList.add('visible');
     } else {
         components.topBarQuestion.classList.remove('visible');
@@ -209,7 +217,24 @@ function disableExtension() {
     isInitialized = false;
 }
 
+function handleNavigation() {
+    chrome.storage.sync.get('extensionEnabled', (data) => {
+        if (data.extensionEnabled !== false) {
+            disableExtension();
+            startExtension();
+        }
+    });
+}
+
 async function main() {
+
+    window.addEventListener('popstate', handleNavigation); // 브라우저 뒤로가기/앞으로가기 버튼
+    //window.addEventListener('pushstate', handleNavigation); // Gemini 내부 링크 클릭
+
+    window.navigation.addEventListener("navigate", (event) => {
+        handleNavigation();
+    });
+
     chrome.storage.sync.get('extensionEnabled', (data) => {
         if (data.extensionEnabled !== false) {
             startExtension();

@@ -58,6 +58,8 @@ body.dark-theme .scroll-to-question-outer-btn:disabled {
 /* 상단 바에 추가될 질문 표시 영역 스타일 */
 #top-bar-question-display {
     padding: 10px 24px;
+    display: flex;
+    align-items: center;
     background-color: #e9eef6;
     color: #3c4043;
     font-size: 16px;
@@ -65,8 +67,6 @@ body.dark-theme .scroll-to-question-outer-btn:disabled {
 
     position: absolute;
     box-sizing: border-box;
-
-    vertical-align: middle;
 
     white-space: nowrap;
     overflow: hidden;
@@ -81,9 +81,16 @@ body.dark-theme .scroll-to-question-outer-btn:disabled {
 
 #top-bar-question-display.visible {
     opacity: 1;
-    height: auto;
+    height: 44px;
     padding-top: 10px;
     padding-bottom: 10px;
+}
+
+#top-bar-question-display .text-span {
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 body.dark-theme #top-bar-question-display {
