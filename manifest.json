@@ -15,7 +15,18 @@
                 "scripts/gemini.js"
             ],
             "css": [
-                "styles.css"
+                "styles/gemini.css"
+            ]
+        },
+        {
+            "matches": [
+                "https://chatgpt.com/*"
+            ],
+            "js": [
+                "scripts/gpt.js"
+            ],
+            "css": [
+                "styles/gpt.css"
             ]
         }
     ],
@@ -25,7 +36,8 @@
                 "fonts/*.woff2"
             ],
             "matches": [
-                "https://gemini.google.com/*"
+                "https://gemini.google.com/*",
+                "https://chatgpt.com/*"
             ]
         }
     ],

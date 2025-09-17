@@ -1,27 +1,23 @@
-let mainMutationObserver = null;
-let mainResizeObserver = null;
-
-
 const elementVisibility = new Map();
 const components = {
     scrollButton: null,
     topBarQuestion: null,
     topBarTextSpan: null
-}
+};
 const observers = {
     resize: null,
     intersection: null,
     mutation: null
-}
+};
 let cachedQueries = [];
 let cachedResponses = [];
 let isInitialized = false;
 let isScrollingViaButton = false;
-const topBarHeight = 70; // 48 + margin 22
+const topBarHeight = 48;
 
 function disconnectObservers() {
-    if (observers.resize) observers.mutation.disconnect();
-    if (observers.intersection) observers.mutation.disconnect();
+    if (observers.resize) observers.resize.disconnect();
+    if (observers.intersection) observers.intersection.disconnect();
     if (observers.mutation) observers.mutation.disconnect();
     observers.resize = null;
     observers.intersection = null;
@@ -40,7 +36,7 @@ function createScrollButton(iconName, titleText, onClickHandler) {
 
 function createAndPlaceScrollButton() {
     if (components.scrollButton) return;
-    const targetContainer = document.querySelector('.input-area-container');
+    const targetContainer = document.querySelector('#thread-bottom');
     if (!targetContainer) return;
     targetContainer.style.position = 'relative';
 
@@ -61,7 +57,6 @@ function createAndPlaceScrollButton() {
                 isScrollingViaButton = true;
                 cachedQueries[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-
             setTimeout(() => {
                 isScrollingViaButton = false;
                 updateTopBarVisibility();
@@ -88,11 +83,12 @@ function createAndPlaceScrollButton() {
     buttonContainer.appendChild(upButton);
     buttonContainer.appendChild(downButton);
     targetContainer.appendChild(buttonContainer);
+    components.scrollButton = buttonContainer;
 }
 
 function createTopBarDisplay() {
     if (components.topBarQuestion) return;
-    const topBar = document.querySelector('.desktop-ogb-buffer');
+    const topBar = document.querySelector('header#page-header');
     if (!topBar) return;
     const display = document.createElement('div');
     display.id = 'top-bar-question-display';
@@ -106,7 +102,7 @@ function createTopBarDisplay() {
 }
 
 function syncTopBarPosition() {
-    const referenceElement = document.querySelector('.response-container-content');
+    const referenceElement = document.querySelector('article[data-turn="assistant"]');
     if (components.topBarQuestion && referenceElement) {
         const rect = referenceElement.getBoundingClientRect();
         components.topBarQuestion.style.width = `${rect.width}px`;
@@ -130,16 +126,12 @@ function updateTopBarVisibility() {
 
             if (isQuestionVisible === false && isAnswerVisible === true) {
                 const answerRect = answer.getBoundingClientRect();
-
                 const footerHeight = 32;
                 const threshold = footerHeight + topBarHeight;
-
                 const isAnswerBarelyVisible = answerRect.bottom < threshold;
-                if (isAnswerBarelyVisible) {
-                    continue;
-                }
+                if (isAnswerBarelyVisible) continue;
 
-                const originalText = question.querySelector('.query-text')?.innerText || '';
+                const originalText = question.innerText || '';
                 textToShow = originalText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
                 break;
             }
@@ -156,10 +148,9 @@ function updateTopBarVisibility() {
     }
 }
 
-
 function initializeFeatures() {
-    cachedQueries = Array.from(document.querySelectorAll('user-query'));
-    cachedResponses = Array.from(document.querySelectorAll('model-response'));
+    cachedQueries = Array.from(document.querySelectorAll('article[data-turn="user"]'));
+    cachedResponses = Array.from(document.querySelectorAll('article[data-turn="assistant"]'));
 
     createAndPlaceScrollButton();
     createTopBarDisplay();
@@ -167,7 +158,7 @@ function initializeFeatures() {
     disconnectObservers();
 
     observers.resize = new ResizeObserver(syncTopBarPosition);
-    const chatHistory = document.getElementById('chat-history');
+    const chatHistory = document.querySelector('main');
     if (chatHistory) {
         observers.resize.observe(chatHistory);
     }
@@ -182,24 +173,24 @@ function initializeFeatures() {
     observers.mutation = new MutationObserver((mutations) => {
         mutations.forEach(mutation => {
             mutation.addedNodes.forEach(node => {
-                if (node.matches && node.matches('.conversation-container')) {
-                    const query = node.querySelector('user-query');
-                    const response = node.querySelector('model-response');
-                    if (query) {
-                        cachedQueries.push(query);
-                        observers.intersection.observe(query)
+                if (node.matches && node.matches('article')) {
+                    if (node.getAttribute('data-turn') === 'user') {
+                        cachedQueries.push(node);
+                        observers.intersection.observe(node);
                     }
-                    if (response) {
-                        cachedResponses.push(response);
-                        observers.intersection.observe(response);
+                    if (node.getAttribute('data-turn') === 'assistant') {
+                        cachedResponses.push(node);
+                        observers.intersection.observe(node);
                     }
                 }
             });
         });
     });
-    observers.mutation.observe(document.querySelector('#chat-history'), { childList: true });
+    const chatMain = document.querySelector('main');
+    if (chatMain) {
+        observers.mutation.observe(chatMain, { childList: true, subtree: true });
+    }
 }
-
 
 function hasMandatoryElements(selectors) {
     return selectors.every(selector => document.querySelector(selector));
@@ -208,7 +199,7 @@ function hasMandatoryElements(selectors) {
 async function startExtension() {
     if (isInitialized) return;
 
-    const CHAT_CONTAINER_SELECTOR = ['.desktop-ogb-buffer', '#chat-history user-query', '.input-area-container'];
+    const CHAT_CONTAINER_SELECTOR = ['header#page-header', 'article[data-turn="user"]', '#thread-bottom'];
     if (hasMandatoryElements(CHAT_CONTAINER_SELECTOR)) {
         initializeFeatures();
     } else {
@@ -247,11 +238,9 @@ function handleNavigation() {
 }
 
 async function main() {
+    window.addEventListener('popstate', handleNavigation);
 
-    window.addEventListener('popstate', handleNavigation); // 브라우저 뒤로가기/앞으로가기 버튼
-    //window.addEventListener('pushstate', handleNavigation); // Gemini 내부 링크 클릭
-
-    window.navigation.addEventListener("navigate", (event) => {
+    window.navigation?.addEventListener?.("navigate", (event) => {
         handleNavigation();
     });
 
