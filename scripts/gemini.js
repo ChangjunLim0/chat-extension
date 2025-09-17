@@ -17,6 +17,7 @@ let cachedQueries = [];
 let cachedResponses = [];
 let isInitialized = false;
 let isScrollingViaButton = false;
+const topBarHeight = 70; // 48 + margin 22
 
 function disconnectObservers() {
     if (observers.resize) observers.mutation.disconnect();
@@ -27,6 +28,15 @@ function disconnectObservers() {
     observers.mutation = null;
 }
 
+function createScrollButton(iconName, titleText, onClickHandler) {
+    const button = document.createElement('button');
+    button.className = 'chat-scroll-btn';
+    button.innerHTML = `<span class="material-symbols-outlined">${iconName}</span>`;
+    button.title = titleText;
+    button.draggable = false;
+    button.onclick = onClickHandler;
+    return button;
+}
 
 function createAndPlaceScrollButton() {
     if (components.scrollButton) return;
@@ -34,37 +44,50 @@ function createAndPlaceScrollButton() {
     if (!targetContainer) return;
     targetContainer.style.position = 'relative';
 
-    const button = document.createElement('button');
-    button.id = 'scroll-to-question-btn';
-    button.className = 'scroll-to-question-outer-btn';
-    button.innerHTML = '<span class="material-symbols-outlined">arrow_upward</span>';
-    button.title = '현재 보이는 답변의 질문으로 스크롤';
-    button.draggable = false;
+    const buttonContainer = document.createElement('div');
+    buttonContainer.id = 'scroll-button-container';
+    buttonContainer.className = 'scroll-button-container';
 
-    button.onclick = () => {
+    const upButton = createScrollButton('arrow_upward', 'scroll to the previous question', () => {
         const visibleResponses = cachedResponses.filter(resp => {
             const rect = resp.getBoundingClientRect();
             return rect.top < window.innerHeight && rect.bottom >= 0;
         });
-
         if (visibleResponses.length > 0) {
             visibleResponses.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
             const topMostVisibleAnswer = visibleResponses[0];
             const index = cachedResponses.indexOf(topMostVisibleAnswer);
-
             if (index > -1 && cachedQueries[index]) {
                 isScrollingViaButton = true;
                 cachedQueries[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-                setTimeout(() => {
-                    isScrollingViaButton = false;
-                    updateTopBarVisibility();
-                }, 500);
             }
+
+            setTimeout(() => {
+                isScrollingViaButton = false;
+                updateTopBarVisibility();
+            }, 500);
         }
-    };
-    targetContainer.appendChild(button);
-    components.scrollButton = button;
+    });
+
+    const downButton = createScrollButton('arrow_downward', 'scroll to the next question', () => {
+        const currentAnswer = [...cachedResponses].find(q => q.getBoundingClientRect().bottom > topBarHeight);
+        const currentIndex = currentAnswer ? cachedResponses.indexOf(currentAnswer) : -1;
+        const nextIndex = currentIndex + 1;
+        if (nextIndex < cachedQueries.length) {
+            isScrollingViaButton = true;
+            cachedQueries[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => {
+                isScrollingViaButton = false;
+                updateTopBarVisibility();
+            }, 500);
+        } else {
+            cachedResponses.at(-1).scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+    });
+
+    buttonContainer.appendChild(upButton);
+    buttonContainer.appendChild(downButton);
+    targetContainer.appendChild(buttonContainer);
 }
 
 function createTopBarDisplay() {
@@ -111,9 +134,7 @@ function updateTopBarVisibility() {
 
                 // 답변의 보이는 아랫부분 높이가 50px 미만이면 건너뛰기
                 const footerHeight = 32;
-                const topBarHeight = 48;
-                const bufferHeight = 20;
-                const threshold = footerHeight + topBarHeight + bufferHeight;
+                const threshold = footerHeight + topBarHeight;
 
                 const isAnswerBarelyVisible = answerRect.bottom < threshold;
                 if (isAnswerBarelyVisible) {
@@ -129,6 +150,7 @@ function updateTopBarVisibility() {
     if (textToShow) {
         if (components.topBarTextSpan) {
             components.topBarTextSpan.innerText = textToShow;
+            components.title = textToShow;
         }
         components.topBarQuestion.classList.add('visible');
     } else {
