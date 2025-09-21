@@ -1,24 +1,20 @@
-let mainMutationObserver = null;
-let mainResizeObserver = null;
-
-
-const elementVisibility = new Map();
+const elementVisibility = new WeakMap();
 const components = {
     scrollButton: null,
     topBarQuestion: null,
     topBarTextSpan: null,
-    debugDisplay: null
+    countDisplay: null
 }
 const observers = {
     resize: null,
     intersection: null,
-    mutation: null
+    mutation: null,
 }
 const chatState = {
     queries: [],
     responses: [],
-    currentVisibleQueryIndex: -1,
-    currentVisibleResponseIndex: -1
+    currentVisibleResponseIndex: -1,
+    isCurrentQueryVisible: false
 };
 
 let isInitialized = false;
@@ -39,7 +35,6 @@ function throttle(func, limit) {
 }
 
 function processConversationNode(node) {
-    console.log("====process node ", node.nodeType);
     if (node.nodeType !== 1 || !node.matches('.conversation-container')) return;
 
     const query = node.querySelector('user-query');
@@ -86,7 +81,7 @@ function createAndPlaceScrollButton() {
     buttonContainer.className = 'scroll-button-container';
 
     const upButton = createScrollButton('arrow_upward', 'scroll to the previous question', () => {
-        const targetIndex = chatState.currentVisibleResponseIndex - 1;
+        const targetIndex = chatState.currentVisibleResponseIndex - (chatState.isCurrentQueryVisible ? 1 : 0);
         if (targetIndex >= 0) {
             chatState.queries[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
@@ -117,18 +112,13 @@ function createAndPlaceScrollButton() {
     buttonContainer.appendChild(downButton);
     targetContainer.appendChild(buttonContainer);
 
-    if (!document.getElementById('debug-display')) {
-        const debugDisplay = document.createElement('div');
-        debugDisplay.id = 'debug-display';
-        debugDisplay.style.position = 'absolute';
-        debugDisplay.style.right = '50px'; // 버튼 옆에 위치
-        debugDisplay.style.bottom = '12px';
-        debugDisplay.style.fontSize = '12px';
-        debugDisplay.style.color = '#888';
-        debugDisplay.style.fontFamily = 'monospace';
+    if (!components.countDisplay) {
+        const countDisplay = document.createElement('div');
+        countDisplay.id = 'count-display';
 
-        targetContainer.appendChild(debugDisplay);
-        components.debugDisplay = debugDisplay;
+        targetContainer.appendChild(countDisplay);
+        components.countDisplay = countDisplay;
+    }
     }
 }
 
@@ -180,10 +170,7 @@ function updateTopBar() {
         topMostVisibleResponseIndex = chatState.responses.length - 1;
     }
 
-    chatState.currentVisibleResponseIndex = topMostVisibleResponseIndex; // 현재 인덱스 업데이트
-
-    console.log(" update top bar current index ", chatState.currentVisibleQueryIndex)
-
+    chatState.currentVisibleResponseIndex = topMostVisibleResponseIndex;
     if (topMostVisibleResponseIndex === -1) {
         setTopBarVisibility(false);
         return;
@@ -191,7 +178,7 @@ function updateTopBar() {
 
     const currentQuestion = chatState.queries[topMostVisibleResponseIndex];
     const isQuestionVisible = elementVisibility.get(currentQuestion);
-    console.log(" question visible", isQuestionVisible)
+    chatState.isCurrentQueryVisible = isQuestionVisible;
     if (!isQuestionVisible) {
         const originalText = currentQuestion.querySelector('.query-text')?.innerText || '';
         const textToShow = originalText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
@@ -202,8 +189,8 @@ function updateTopBar() {
         }
     }
     setTopBarVisibility(!isQuestionVisible);
-    if (components.debugDisplay) {
-        components.debugDisplay.innerText = `Index: ${topMostVisibleResponseIndex} / Total: ${chatState.responses.length}`;
+    if (components.countDisplay) {
+        components.countDisplay.innerText = `${topMostVisibleResponseIndex + 1} / ${chatState.responses.length}`;
     }
 }
 
@@ -269,14 +256,21 @@ async function startExtension() {
 }
 
 function disableExtension() {
-    components.topBarQuestion?.remove();
-    components.scrollButton?.remove();
-    components.topBarQuestion = null;
-    components.scrollButton = null;
+    if (isInitialized) {
+        components.topBarQuestion?.remove();
+        components.scrollButton?.remove();
+        components.topBarQuestion = null;
+        components.scrollButton = null;
 
-    disconnectObservers();
+        disconnectObservers();
 
-    isInitialized = false;
+        chatState.queries = [];
+        chatState.responses = [];
+        chatState.currentVisibleResponseIndex = -1;
+        chatState.isCurrentQueryVisible = false;
+
+        isInitialized = false;
+    }
 }
 
 function handleNavigation() {
@@ -289,16 +283,13 @@ function handleNavigation() {
 }
 
 async function main() {
+    const data = await chrome.storage.sync.get('extensionEnabled');
+    if (data.extensionEnabled === false) return;
+    startExtension();
 
     window.addEventListener('popstate', handleNavigation); // 브라우저 뒤로가기/앞으로가기 버튼
     window.navigation.addEventListener("navigate", (event) => {
         handleNavigation();
-    });
-
-    chrome.storage.sync.get('extensionEnabled', (data) => {
-        if (data.extensionEnabled !== false) {
-            startExtension();
-        }
     });
 
     chrome.storage.onChanged.addListener((changes) => {
@@ -310,9 +301,6 @@ async function main() {
             }
         }
     });
-
-    const data = await chrome.storage.sync.get('extensionEnabled');
-    if (data.extensionEnabled === false) return;
 }
 
 main();
