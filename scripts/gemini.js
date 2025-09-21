@@ -119,6 +119,32 @@ function createAndPlaceScrollButton() {
         targetContainer.appendChild(countDisplay);
         components.countDisplay = countDisplay;
     }
+
+    if (!document.getElementById('debug-refresh-btn')) {
+        const refreshButton = document.createElement('button');
+        refreshButton.id = 'debug-refresh-btn';
+        refreshButton.innerHTML = '🔄'; // 새로고침 아이콘
+        refreshButton.title = 'Update State Manually';
+
+        // 버튼 기본 스타일링
+        refreshButton.style.background = 'none';
+        refreshButton.style.border = '1px solid #ccc';
+        refreshButton.style.borderRadius = '50%';
+        refreshButton.style.width = '24px';
+        refreshButton.style.height = '24px';
+        refreshButton.style.cursor = 'pointer';
+        refreshButton.style.display = 'flex';
+        refreshButton.style.justifyContent = 'center';
+        refreshButton.style.alignItems = 'center';
+        refreshButton.style.padding = '0';
+
+        // 버튼 클릭 시 updateTopBarVisibility 함수를 직접 호출!
+        refreshButton.onclick = () => {
+            updateTopBar();
+        };
+
+        // 디버그 컨테이너의 맨 앞에 버튼을 추가합니다.
+        buttonContainer.prepend(refreshButton);
     }
 }
 
