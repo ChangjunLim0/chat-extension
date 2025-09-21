@@ -6,25 +6,62 @@ const elementVisibility = new Map();
 const components = {
     scrollButton: null,
     topBarQuestion: null,
-    topBarTextSpan: null
+    topBarTextSpan: null,
+    debugDisplay: null
 }
 const observers = {
     resize: null,
     intersection: null,
     mutation: null
 }
-let cachedQueries = [];
-let cachedResponses = [];
+const chatState = {
+    queries: [],
+    responses: [],
+    currentVisibleQueryIndex: -1,
+    currentVisibleResponseIndex: -1
+};
+
 let isInitialized = false;
 let isScrollingViaButton = false;
 const topBarHeight = 70; // 48 + margin 22
 
+function throttle(func, limit) {
+    let inThrottle;
+    return function () {
+        const args = arguments;
+        const context = this;
+        if (!inThrottle) {
+            func.apply(context, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    }
+}
+
+function processConversationNode(node) {
+    console.log("====process node ", node.nodeType);
+    if (node.nodeType !== 1 || !node.matches('.conversation-container')) return;
+
+    const query = node.querySelector('user-query');
+    const response = node.querySelector('model-response');
+    if (query && response) {
+        if (!chatState.queries.includes(query)) {
+            chatState.queries.push(query);
+            chatState.responses.push(response);
+            observers.intersection.observe(query);
+            observers.intersection.observe(response);
+        }
+    }
+}
+
 function disconnectObservers() {
-    if (observers.resize) observers.mutation.disconnect();
-    if (observers.intersection) observers.mutation.disconnect();
-    if (observers.mutation) observers.mutation.disconnect();
+    observers.resize?.disconnect();
     observers.resize = null;
+
+    observers.intersection?.disconnect();
     observers.intersection = null;
+
+    observers.mutation?.disconnect();
     observers.mutation = null;
 }
 
@@ -49,45 +86,50 @@ function createAndPlaceScrollButton() {
     buttonContainer.className = 'scroll-button-container';
 
     const upButton = createScrollButton('arrow_upward', 'scroll to the previous question', () => {
-        const visibleResponses = cachedResponses.filter(resp => {
-            const rect = resp.getBoundingClientRect();
-            return rect.top < window.innerHeight && rect.bottom >= 0;
-        });
-        if (visibleResponses.length > 0) {
-            visibleResponses.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
-            const topMostVisibleAnswer = visibleResponses[0];
-            const index = cachedResponses.indexOf(topMostVisibleAnswer);
-            if (index > -1 && cachedQueries[index]) {
-                isScrollingViaButton = true;
-                cachedQueries[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-
-            setTimeout(() => {
-                isScrollingViaButton = false;
-                updateTopBarVisibility();
-            }, 500);
+        const targetIndex = chatState.currentVisibleResponseIndex - 1;
+        if (targetIndex >= 0) {
+            chatState.queries[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            return;
         }
+        setTopBarVisibility(false);
+        setTimeout(() => {
+            setTopBarVisibility(true);
+        }, 500);
     });
 
     const downButton = createScrollButton('arrow_downward', 'scroll to the next question', () => {
-        const currentAnswer = [...cachedResponses].find(q => q.getBoundingClientRect().bottom > topBarHeight);
-        const currentIndex = currentAnswer ? cachedResponses.indexOf(currentAnswer) : -1;
-        const nextIndex = currentIndex + 1;
-        if (nextIndex < cachedQueries.length) {
-            isScrollingViaButton = true;
-            cachedQueries[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
-            setTimeout(() => {
-                isScrollingViaButton = false;
-                updateTopBarVisibility();
-            }, 500);
-        } else {
-            cachedResponses.at(-1).scrollIntoView({ behavior: 'smooth', block: 'end' });
+        if (chatState.queries.length == 0) return;
+        const targetIndex = chatState.currentVisibleResponseIndex + 1;
+        if (targetIndex < chatState.queries.length) {
+            chatState.queries[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+        else {
+            chatState.responses.at(-1).scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+        setTopBarVisibility(false);
+        setTimeout(() => {
+            setTopBarVisibility(true);
+        }, 500);
     });
 
     buttonContainer.appendChild(upButton);
     buttonContainer.appendChild(downButton);
     targetContainer.appendChild(buttonContainer);
+
+    if (!document.getElementById('debug-display')) {
+        const debugDisplay = document.createElement('div');
+        debugDisplay.id = 'debug-display';
+        debugDisplay.style.position = 'absolute';
+        debugDisplay.style.right = '50px'; // 버튼 옆에 위치
+        debugDisplay.style.bottom = '12px';
+        debugDisplay.style.fontSize = '12px';
+        debugDisplay.style.color = '#888';
+        debugDisplay.style.fontFamily = 'monospace';
+
+        targetContainer.appendChild(debugDisplay);
+        components.debugDisplay = debugDisplay;
+    }
 }
 
 function createTopBarDisplay() {
@@ -114,53 +156,60 @@ function syncTopBarPosition() {
     }
 }
 
-function updateTopBarVisibility() {
-    if (!components.topBarQuestion) return;
-    if (isScrollingViaButton) {
-        components.topBarQuestion.classList.remove('visible');
-        return;
+function setTopBarVisibility(isVisible) {
+    if (isVisible) {
+        components.topBarQuestion?.classList.add('visible');
+    } else {
+        components.topBarQuestion?.classList.remove('visible');
     }
-    let textToShow = null;
-    for (let i = cachedQueries.length - 1; i >= 0; i--) {
-        const question = cachedQueries[i];
-        const answer = cachedResponses[i];
-        if (question && answer) {
-            const isQuestionVisible = elementVisibility.get(question);
-            const isAnswerVisible = elementVisibility.get(answer);
+}
 
-            if (isQuestionVisible === false && isAnswerVisible === true) {
-                const answerRect = answer.getBoundingClientRect();
+function updateTopBar() {
+    if (!components.topBarQuestion) return;
 
-                const footerHeight = 32;
-                const threshold = footerHeight + topBarHeight;
-
-                const isAnswerBarelyVisible = answerRect.bottom < threshold;
-                if (isAnswerBarelyVisible) {
-                    continue;
-                }
-
-                const originalText = question.querySelector('.query-text')?.innerText || '';
-                textToShow = originalText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-                break;
-            }
+    let topMostVisibleResponseIndex = -1;
+    for (let i = 0; i < chatState.responses.length; i++) {
+        const rect = chatState.responses[i].getBoundingClientRect();
+        if (rect.bottom > topBarHeight) {
+            topMostVisibleResponseIndex = i;
+            break;
         }
     }
-    if (textToShow) {
+
+    if (topMostVisibleResponseIndex === -1 && chatState.responses.length > 0) {
+        topMostVisibleResponseIndex = chatState.responses.length - 1;
+    }
+
+    chatState.currentVisibleResponseIndex = topMostVisibleResponseIndex; // 현재 인덱스 업데이트
+
+    console.log(" update top bar current index ", chatState.currentVisibleQueryIndex)
+
+    if (topMostVisibleResponseIndex === -1) {
+        setTopBarVisibility(false);
+        return;
+    }
+
+    const currentQuestion = chatState.queries[topMostVisibleResponseIndex];
+    const isQuestionVisible = elementVisibility.get(currentQuestion);
+    console.log(" question visible", isQuestionVisible)
+    if (!isQuestionVisible) {
+        const originalText = currentQuestion.querySelector('.query-text')?.innerText || '';
+        const textToShow = originalText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+
         if (components.topBarTextSpan) {
             components.topBarTextSpan.innerText = textToShow;
             components.title = textToShow;
         }
-        components.topBarQuestion.classList.add('visible');
-    } else {
-        components.topBarQuestion.classList.remove('visible');
+    }
+    setTopBarVisibility(!isQuestionVisible);
+    if (components.debugDisplay) {
+        components.debugDisplay.innerText = `Index: ${topMostVisibleResponseIndex} / Total: ${chatState.responses.length}`;
     }
 }
 
+const throttledUpdateTopBar = throttle(updateTopBar, 100);
 
 function initializeFeatures() {
-    cachedQueries = Array.from(document.querySelectorAll('user-query'));
-    cachedResponses = Array.from(document.querySelectorAll('model-response'));
-
     createAndPlaceScrollButton();
     createTopBarDisplay();
 
@@ -174,30 +223,23 @@ function initializeFeatures() {
 
     observers.intersection = new IntersectionObserver((entries) => {
         entries.forEach(entry => elementVisibility.set(entry.target, entry.isIntersecting));
-        updateTopBarVisibility();
+        throttledUpdateTopBar();
     }, { root: document.querySelector('main'), threshold: 0 });
-
-    [...cachedQueries, ...cachedResponses].forEach(el => observers.intersection.observe(el));
 
     observers.mutation = new MutationObserver((mutations) => {
         mutations.forEach(mutation => {
-            mutation.addedNodes.forEach(node => {
-                if (node.matches && node.matches('.conversation-container')) {
-                    const query = node.querySelector('user-query');
-                    const response = node.querySelector('model-response');
-                    if (query) {
-                        cachedQueries.push(query);
-                        observers.intersection.observe(query)
-                    }
-                    if (response) {
-                        cachedResponses.push(response);
-                        observers.intersection.observe(response);
-                    }
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    processConversationNode(node);
                 }
-            });
+            }
         });
     });
-    observers.mutation.observe(document.querySelector('#chat-history'), { childList: true });
+    if (chatHistory) {
+        const conversationList = chatHistory.querySelector('infinite-scroller')
+        Array.from(conversationList.children).forEach(node => processConversationNode(node));
+        observers.mutation.observe(conversationList, { childList: true });
+    }
 }
 
 
@@ -249,8 +291,6 @@ function handleNavigation() {
 async function main() {
 
     window.addEventListener('popstate', handleNavigation); // 브라우저 뒤로가기/앞으로가기 버튼
-    //window.addEventListener('pushstate', handleNavigation); // Gemini 내부 링크 클릭
-
     window.navigation.addEventListener("navigate", (event) => {
         handleNavigation();
     });
