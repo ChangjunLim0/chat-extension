@@ -1,11 +1,15 @@
 {
     "manifest_version": 3,
-    "name": "chat AI extension",
+    "name": "Foxtail - make AI smooth",
     "description": "Extension for improving chat AI services",
-    "version": "0.1",
+    "version": "0.1.0",
     "permissions": [
         "storage"
     ],
+    "icons": {
+        "16": "images/favicon-16.png",
+        "32": "images/favicon-32.png"
+    },
     "content_scripts": [
         {
             "matches": [
