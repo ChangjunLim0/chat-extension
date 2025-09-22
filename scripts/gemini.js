@@ -120,32 +120,10 @@ function createAndPlaceScrollButton() {
         components.countDisplay = countDisplay;
     }
 
-    if (!document.getElementById('debug-refresh-btn')) {
-        const refreshButton = document.createElement('button');
-        refreshButton.id = 'debug-refresh-btn';
-        refreshButton.innerHTML = '🔄'; // 새로고침 아이콘
-        refreshButton.title = 'Update State Manually';
-
-        // 버튼 기본 스타일링
-        refreshButton.style.background = 'none';
-        refreshButton.style.border = '1px solid #ccc';
-        refreshButton.style.borderRadius = '50%';
-        refreshButton.style.width = '24px';
-        refreshButton.style.height = '24px';
-        refreshButton.style.cursor = 'pointer';
-        refreshButton.style.display = 'flex';
-        refreshButton.style.justifyContent = 'center';
-        refreshButton.style.alignItems = 'center';
-        refreshButton.style.padding = '0';
-
-        // 버튼 클릭 시 updateTopBarVisibility 함수를 직접 호출!
-        refreshButton.onclick = () => {
-            updateTopBar();
-        };
-
-        // 디버그 컨테이너의 맨 앞에 버튼을 추가합니다.
-        buttonContainer.prepend(refreshButton);
-    }
+    const refreshButton = createScrollButton('refresh', 'refresh', () => {
+        updateTopBar();
+    });
+    buttonContainer.prepend(refreshButton);
 }
 
 function createTopBarDisplay() {
@@ -260,7 +238,7 @@ function hasMandatoryElements(selectors) {
     return selectors.every(selector => document.querySelector(selector));
 }
 
-async function startExtension() {
+async function launchExtension() {
     if (isInitialized) return;
 
     const CHAT_CONTAINER_SELECTOR = ['.desktop-ogb-buffer', '#chat-history user-query', '.input-area-container'];
@@ -299,29 +277,27 @@ function disableExtension() {
     }
 }
 
-function handleNavigation() {
+async function initializeExtension() {
     chrome.storage.sync.get('extensionEnabled', (data) => {
         if (data.extensionEnabled !== false) {
             disableExtension();
-            startExtension();
+            launchExtension();
         }
     });
 }
 
 async function main() {
-    const data = await chrome.storage.sync.get('extensionEnabled');
-    if (data.extensionEnabled === false) return;
-    startExtension();
+    initializeExtension();
 
-    window.addEventListener('popstate', handleNavigation); // 브라우저 뒤로가기/앞으로가기 버튼
+    window.addEventListener('popstate', initializeExtension); // 브라우저 뒤로가기/앞으로가기 버튼
     window.navigation.addEventListener("navigate", (event) => {
-        handleNavigation();
+        initializeExtension();
     });
 
     chrome.storage.onChanged.addListener((changes) => {
         if (changes.extensionEnabled) {
             if (changes.extensionEnabled.newValue === true) {
-                startExtension();
+                launchExtension();
             } else {
                 disableExtension();
             }
