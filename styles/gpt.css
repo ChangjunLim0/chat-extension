@@ -40,6 +40,19 @@
     background: #f0f0f0;
 }
 
+html.dark .chat-scroll-btn {
+    background-color: #1e1f20;
+    border-color: #5f6368;
+}
+
+html.dark .chat-scroll-btn:hover {
+    background-color: #333537;
+}
+
+html.dark .chat-scroll-btn .material-symbols-outlined {
+    color: #e8eaed;
+}
+
 #top-bar-question-display {
     position: absolute;
     top: 0;
