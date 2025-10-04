@@ -111,6 +111,7 @@ function createAndPlaceScrollButton() {
     buttonContainer.appendChild(upButton);
     buttonContainer.appendChild(downButton);
     targetContainer.appendChild(buttonContainer);
+    components.scrollButton = buttonContainer;
 
     if (!components.countDisplay) {
         const countDisplay = document.createElement('div');
@@ -189,7 +190,7 @@ function updateTopBar() {
 
         if (components.topBarTextSpan) {
             components.topBarTextSpan.innerText = textToShow;
-            components.title = textToShow;
+            components.topBarQuestion.title = textToShow;
         }
     }
     setTopBarVisibility(!isQuestionVisible);
