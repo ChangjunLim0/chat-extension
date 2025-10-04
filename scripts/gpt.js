@@ -15,6 +15,13 @@ let isInitialized = false;
 let isScrollingViaButton = false;
 const topBarHeight = 48;
 
+const chatState = {
+    queries: [],
+    responses: [],
+    currentVisibleResponseIndex: -1,
+    isCurrentQueryVisible: false
+};
+
 function disconnectObservers() {
     if (observers.resize) observers.resize.disconnect();
     if (observers.intersection) observers.intersection.disconnect();
@@ -22,6 +29,26 @@ function disconnectObservers() {
     observers.resize = null;
     observers.intersection = null;
     observers.mutation = null;
+}
+
+function initializeChatState() {
+    chatState.queries?.forEach(query => observers.intersection?.unobserve(query));
+    chatState.responses?.forEach(response => observers.intersection?.unobserve(response));
+
+    chatState.queries = [];
+    chatState.responses = [];
+    chatState.currentVisibleResponseIndex = -1;
+    chatState.isCurrentQueryVisible = false;
+    elementVisibility.clear();
+}
+
+function reloadChatState() {
+    initializeChatState()
+
+    chatState.queries = Array.from(document.querySelectorAll('article[data-turn="user"]'));
+    chatState.responses = Array.from(document.querySelectorAll('article[data-turn="assistant"]'));
+    chatState.queries.forEach(query => observers.intersection.observe(query));
+    chatState.responses.forEach(response => observers.intersection.observe(response));
 }
 
 function createScrollButton(iconName, titleText, onClickHandler) {
@@ -45,6 +72,12 @@ function createAndPlaceScrollButton() {
     buttonContainer.className = 'scroll-button-container';
 
     const upButton = createScrollButton('arrow_upward', 'scroll to the previous question', () => {
+        const actualFirstQuery = document.querySelector('article[data-turn="user"]');
+        if (!actualFirstQuery) return;
+        if (actualFirstQuery && actualFirstQuery !== chatState.queries?.at(0)) {
+            reloadChatState();
+        }
+
         const visibleResponses = cachedResponses.filter(resp => {
             const rect = resp.getBoundingClientRect();
             return rect.top < window.innerHeight && rect.bottom >= 0;
@@ -65,6 +98,12 @@ function createAndPlaceScrollButton() {
     });
 
     const downButton = createScrollButton('arrow_downward', 'scroll to the next question', () => {
+        const actualFirstQuery = document.querySelector('article[data-turn="user"]');
+        if (!actualFirstQuery) return;
+        if (actualFirstQuery && actualFirstQuery !== chatState.queries?.at(0)) {
+            reloadChatState();
+        }
+
         const currentAnswer = [...cachedResponses].find(q => q.getBoundingClientRect().bottom > topBarHeight);
         const currentIndex = currentAnswer ? cachedResponses.indexOf(currentAnswer) : -1;
         const nextIndex = currentIndex + 1;
@@ -168,22 +207,25 @@ function initializeFeatures() {
         updateTopBarVisibility();
     }, { root: document.querySelector('main'), threshold: 0 });
 
-    [...cachedQueries, ...cachedResponses].forEach(el => observers.intersection.observe(el));
+    // 새로운 상태 시스템 사용
+    reloadChatState();
 
     observers.mutation = new MutationObserver((mutations) => {
         mutations.forEach(mutation => {
-            mutation.addedNodes.forEach(node => {
-                if (node.matches && node.matches('article')) {
-                    if (node.getAttribute('data-turn') === 'user') {
-                        cachedQueries.push(node);
-                        observers.intersection.observe(node);
-                    }
-                    if (node.getAttribute('data-turn') === 'assistant') {
-                        cachedResponses.push(node);
-                        observers.intersection.observe(node);
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (node.matches && node.matches('article')) {
+                        if (node.getAttribute('data-turn') === 'user') {
+                            cachedQueries.push(node);
+                            observers.intersection.observe(node);
+                        }
+                        if (node.getAttribute('data-turn') === 'assistant') {
+                            cachedResponses.push(node);
+                            observers.intersection.observe(node);
+                        }
                     }
                 }
-            });
+            }
         });
     });
     const chatMain = document.querySelector('main');
