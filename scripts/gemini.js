@@ -34,6 +34,26 @@ function throttle(func, limit) {
     }
 }
 
+function initializeChatState() {
+    chatState.queries?.forEach(query => observers.intersection?.unobserve(query));
+    chatState.responses?.forEach(response => observers.intersection?.unobserve(response));
+
+    chatState.queries = [];
+    chatState.responses = [];
+    chatState.currentVisibleResponseIndex = -1;
+    chatState.isCurrentQueryVisible = false;
+    elementVisibility = new WeakMap();
+}
+
+function reloadChatState() {
+    initializeChatState();
+
+    chatState.queries = Array.from(document.querySelectorAll('user-query'));
+    chatState.responses = Array.from(document.querySelectorAll('model-response'));
+    chatState.queries.forEach(query => observers.intersection.observe(query));
+    chatState.responses.forEach(response => observers.intersection.observe(response));
+}
+
 function processConversationNode(node) {
     if (node.nodeType !== 1 || !node.matches('.conversation-container')) return;
 
@@ -81,6 +101,12 @@ function createAndPlaceScrollButton() {
     buttonContainer.className = 'scroll-button-container';
 
     const upButton = createScrollButton('arrow_upward', 'scroll to the previous question', () => {
+        const actualFirstQuery = document.querySelector('.conversation-container user-query');
+        if (!actualFirstQuery) return;
+        if (actualFirstQuery && actualFirstQuery !== chatState.queries?.at(0)) {
+            reloadChatState();
+        }
+
         const targetIndex = chatState.currentVisibleResponseIndex - (chatState.isCurrentQueryVisible ? 1 : 0);
         if (targetIndex >= 0) {
             chatState.queries[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -89,12 +115,17 @@ function createAndPlaceScrollButton() {
         }
         setTopBarVisibility(false);
         setTimeout(() => {
-            setTopBarVisibility(true);
-        }, 500);
+            updateTopBar();
+        }, 1100);
     });
 
     const downButton = createScrollButton('arrow_downward', 'scroll to the next question', () => {
-        if (chatState.queries.length == 0) return;
+        const actualFirstQuery = document.querySelector('.conversation-container user-query');
+        if (!actualFirstQuery) return;
+        if (actualFirstQuery && actualFirstQuery !== chatState.queries?.at(0)) {
+            reloadChatState();
+        }
+
         const targetIndex = chatState.currentVisibleResponseIndex + 1;
         if (targetIndex < chatState.queries.length) {
             chatState.queries[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -104,13 +135,14 @@ function createAndPlaceScrollButton() {
         }
         setTopBarVisibility(false);
         setTimeout(() => {
-            setTopBarVisibility(true);
-        }, 500);
+            updateTopBar();
+        }, 1100);
     });
 
     buttonContainer.appendChild(upButton);
     buttonContainer.appendChild(downButton);
     targetContainer.appendChild(buttonContainer);
+    components.scrollButton = buttonContainer;
 
     if (!components.countDisplay) {
         const countDisplay = document.createElement('div');
@@ -189,7 +221,7 @@ function updateTopBar() {
 
         if (components.topBarTextSpan) {
             components.topBarTextSpan.innerText = textToShow;
-            components.title = textToShow;
+            components.topBarQuestion.title = textToShow;
         }
     }
     setTopBarVisibility(!isQuestionVisible);
@@ -281,7 +313,7 @@ async function initializeExtension() {
     chrome.storage.sync.get('extensionEnabled', (data) => {
         if (data.extensionEnabled !== false) {
             disableExtension();
-            startExtension();
+            launchExtension();
         }
     });
 }
