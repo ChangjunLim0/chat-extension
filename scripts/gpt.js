@@ -1,4 +1,4 @@
-const elementVisibility = new Map();
+let elementVisibility = new Map();
 const components = {
     scrollButton: null,
     topBarQuestion: null,

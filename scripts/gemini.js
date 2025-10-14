@@ -1,4 +1,4 @@
-const elementVisibility = new WeakMap();
+let elementVisibility = new WeakMap();
 const components = {
     scrollButton: null,
     topBarQuestion: null,
