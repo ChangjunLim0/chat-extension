@@ -1,12 +1,14 @@
 let elementVisibility = new WeakMap();
+let isPanelCollapsed = false;
 const components = {
     scrollButton: null,
     topBarQuestion: null,
+    sideQuestionDisplay: null,
+    sideQuestionTextSpan: null,
     topBarTextSpan: null,
     countDisplay: null
 }
 const observers = {
-    resize: null,
     intersection: null,
     mutation: null,
 }
@@ -70,9 +72,6 @@ function processConversationNode(node) {
 }
 
 function disconnectObservers() {
-    observers.resize?.disconnect();
-    observers.resize = null;
-
     observers.intersection?.disconnect();
     observers.intersection = null;
 
@@ -113,9 +112,9 @@ function createAndPlaceScrollButton() {
         } else {
             return;
         }
-        setTopBarVisibility(false);
+        setSideDisplayVisibility(false);
         setTimeout(() => {
-            updateTopBar();
+            updateSideDisplay();
         }, 1100);
     });
 
@@ -133,9 +132,9 @@ function createAndPlaceScrollButton() {
         else {
             chatState.responses.at(-1).scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
-        setTopBarVisibility(false);
+        setSideDisplayVisibility(false);
         setTimeout(() => {
-            updateTopBar();
+            updateSideDisplay();
         }, 1100);
     });
 
@@ -153,45 +152,60 @@ function createAndPlaceScrollButton() {
     }
 
     const refreshButton = createScrollButton('refresh', 'refresh', () => {
-        updateTopBar();
+        updateSideDisplay();
     });
     buttonContainer.prepend(refreshButton);
 }
 
-function createTopBarDisplay() {
-    if (components.topBarQuestion) return;
-    const topBar = document.querySelector('.desktop-ogb-buffer');
-    if (!topBar) return;
-    const display = document.createElement('div');
-    display.id = 'top-bar-question-display';
+function createSideDisplay() {
+    let display = document.getElementById('side-question-display');
+    if (display) return;
+
+    display = document.createElement('div');
+    display.id = 'side-question-display';
     const textSpan = document.createElement('span');
-    textSpan.className = 'text-span';
+    textSpan.className = 'question-text';
     display.appendChild(textSpan);
+    let footer = document.createElement('div')
+    footer.className = 'side-panel-footer'
+    const toggleButton = document.createElement('button');
+    toggleButton.className = 'panel-toggle-btn';
+    const toggleIcon = document.createElement('span');
+    toggleIcon.className = 'material-symbols-outlined';
+    toggleIcon.innerText = 'expand_less';
+    toggleButton.appendChild(toggleIcon);
+    footer.appendChild(toggleButton);
+    display.appendChild(footer);
 
-    topBar.prepend(display);
-    components.topBarQuestion = display;
-    components.topBarTextSpan = textSpan;
+    toggleButton.onclick = () => {
+        isPanelCollapsed = !isPanelCollapsed;
+
+        if (isPanelCollapsed) {
+            display.classList.add('collapsed');
+            toggleIcon.innerText = 'expand_more';
+            toggleButton.title = "expand";
+        } else {
+            display.classList.remove('collapsed');
+            toggleIcon.innerText = 'expand_less';
+            toggleButton.title = "collapse";
+        }
+    };
+
+    document.body.appendChild(display);
+    components.sideQuestionDisplay = display;
+    components.sideQuestionTextSpan = textSpan;
 }
 
-function syncTopBarPosition() {
-    const referenceElement = document.querySelector('.response-container-content');
-    if (components.topBarQuestion && referenceElement) {
-        const rect = referenceElement.getBoundingClientRect();
-        components.topBarQuestion.style.width = `${rect.width}px`;
-        components.topBarQuestion.style.left = `${rect.left}px`;
-    }
-}
-
-function setTopBarVisibility(isVisible) {
+function setSideDisplayVisibility(isVisible) {
     if (isVisible) {
-        components.topBarQuestion?.classList.add('visible');
+        components.sideQuestionDisplay?.classList.add('visible');
     } else {
-        components.topBarQuestion?.classList.remove('visible');
+        components.sideQuestionDisplay?.classList.remove('visible');
     }
 }
 
-function updateTopBar() {
-    if (!components.topBarQuestion) return;
+function updateSideDisplay() {
+    if (!components.sideQuestionDisplay) return;
 
     let topMostVisibleResponseIndex = -1;
     for (let i = 0; i < chatState.responses.length; i++) {
@@ -208,7 +222,7 @@ function updateTopBar() {
 
     chatState.currentVisibleResponseIndex = topMostVisibleResponseIndex;
     if (topMostVisibleResponseIndex === -1) {
-        setTopBarVisibility(false);
+        setSideDisplayVisibility(false);
         return;
     }
 
@@ -219,34 +233,27 @@ function updateTopBar() {
         const originalText = currentQuestion.querySelector('.query-text')?.innerText || '';
         const textToShow = originalText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
 
-        if (components.topBarTextSpan) {
-            components.topBarTextSpan.innerText = textToShow;
-            components.topBarQuestion.title = textToShow;
-        }
+        components.sideQuestionTextSpan.innerText = textToShow;
     }
-    setTopBarVisibility(!isQuestionVisible);
+    setSideDisplayVisibility(!isQuestionVisible);
     if (components.countDisplay) {
         components.countDisplay.innerText = `${topMostVisibleResponseIndex + 1} / ${chatState.responses.length}`;
     }
 }
 
-const throttledUpdateTopBar = throttle(updateTopBar, 100);
+const throttledUpdateSideDisplay = throttle(updateSideDisplay, 100);
 
 function initializeFeatures() {
     createAndPlaceScrollButton();
-    createTopBarDisplay();
+    createSideDisplay();
 
     disconnectObservers();
 
-    observers.resize = new ResizeObserver(syncTopBarPosition);
     const chatHistory = document.getElementById('chat-history');
-    if (chatHistory) {
-        observers.resize.observe(chatHistory);
-    }
 
     observers.intersection = new IntersectionObserver((entries) => {
         entries.forEach(entry => elementVisibility.set(entry.target, entry.isIntersecting));
-        throttledUpdateTopBar();
+        throttledUpdateSideDisplay();
     }, { root: document.querySelector('main'), threshold: 0 });
 
     observers.mutation = new MutationObserver((mutations) => {
@@ -263,6 +270,7 @@ function initializeFeatures() {
         Array.from(conversationList.children).forEach(node => processConversationNode(node));
         observers.mutation.observe(conversationList, { childList: true });
     }
+    isInitialized = true;
 }
 
 
@@ -288,29 +296,27 @@ async function launchExtension() {
             subtree: true
         });
     }
-    isInitialized = true;
 }
 
 function disableExtension() {
-    if (isInitialized) {
-        components.topBarQuestion?.remove();
-        components.scrollButton?.remove();
-        components.topBarQuestion = null;
-        components.scrollButton = null;
+    components.sideQuestionDisplay?.remove();
+    components.scrollButton?.remove();
+    components.countDisplay?.remove();
+    components.sideQuestionDisplay = null;
+    components.scrollButton = null;
+    components.countDisplay = null;
+    components.topBarQuestion = null;
+    components.sideQuestionTextSpan = null;
+    components.topBarTextSpan = null;
 
-        disconnectObservers();
+    disconnectObservers();
+    initializeChatState();
 
-        chatState.queries = [];
-        chatState.responses = [];
-        chatState.currentVisibleResponseIndex = -1;
-        chatState.isCurrentQueryVisible = false;
-
-        isInitialized = false;
-    }
+    isInitialized = false;
 }
 
 async function initializeExtension() {
-    chrome.storage.sync.get('extensionEnabled', (data) => {
+    chrome.storage.sync.get(['extensionEnabled']).then((data) => {
         if (data.extensionEnabled !== false) {
             disableExtension();
             launchExtension();
