@@ -1,5 +1,8 @@
 let elementVisibility = new Map();
 let isPanelCollapsed = false;
+
+const DEBUG_MODE = false;
+
 const components = {
     scrollButton: null,
     topBarQuestion: null,
@@ -75,6 +78,14 @@ function createScrollButton(iconName, titleText, onClickHandler) {
     return button;
 }
 
+function createCountDisplay(targetContainer) {
+    if (components.countDisplay) return;
+    const countDisplay = document.createElement('div');
+    countDisplay.id = 'count-display';
+    targetContainer.appendChild(countDisplay);
+    components.countDisplay = countDisplay;
+}
+
 function createAndPlaceScrollButton() {
     if (components.scrollButton) return;
     const targetContainer = document.querySelector('#thread-bottom');
@@ -129,12 +140,8 @@ function createAndPlaceScrollButton() {
     targetContainer.appendChild(buttonContainer);
     components.scrollButton = buttonContainer;
 
-    if (!components.countDisplay) {
-        const countDisplay = document.createElement('div');
-        countDisplay.id = 'count-display';
-
-        targetContainer.appendChild(countDisplay);
-        components.countDisplay = countDisplay;
+    if (DEBUG_MODE) {
+        createCountDisplay(targetContainer);
     }
 
     const refreshButton = createScrollButton('refresh', 'refresh', () => {
@@ -226,7 +233,7 @@ function updateSideDisplay() {
         components.sideQuestionTextSpan.innerText = textToShow;
     }
     setSideDisplayVisibility(!isQuestionVisible);
-    if (components.countDisplay) {
+    if (DEBUG_MODE && components.countDisplay) {
         components.countDisplay.innerText = `${topMostVisibleResponseIndex + 1} / ${chatState.responses.length}`;
     }
 }
@@ -305,10 +312,12 @@ async function startExtension() {
 function disableExtension() {
     components.sideQuestionDisplay?.remove();
     components.scrollButton?.remove();
-    components.countDisplay?.remove();
+    if (DEBUG_MODE) {
+        components.countDisplay?.remove();
+        components.countDisplay = null;
+    }
     components.sideQuestionDisplay = null;
     components.scrollButton = null;
-    components.countDisplay = null;
     components.topBarQuestion = null;
     components.sideQuestionTextSpan = null;
     components.topBarTextSpan = null;
