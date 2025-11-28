@@ -1,30 +1,84 @@
-let mainMutationObserver = null;
-let mainResizeObserver = null;
+let elementVisibility = new WeakMap();
+let isPanelCollapsed = false;
 
+const DEBUG_MODE = false;
 
-const elementVisibility = new Map();
 const components = {
     scrollButton: null,
     topBarQuestion: null,
-    topBarTextSpan: null
+    sideQuestionDisplay: null,
+    sideQuestionTextSpan: null,
+    topBarTextSpan: null,
+    countDisplay: null
 }
 const observers = {
-    resize: null,
     intersection: null,
-    mutation: null
+    mutation: null,
 }
-let cachedQueries = [];
-let cachedResponses = [];
+const chatState = {
+    queries: [],
+    responses: [],
+    currentVisibleResponseIndex: -1,
+    isCurrentQueryVisible: false
+};
+
 let isInitialized = false;
 let isScrollingViaButton = false;
 const topBarHeight = 70; // 48 + margin 22
 
+function throttle(func, limit) {
+    let inThrottle;
+    return function () {
+        const args = arguments;
+        const context = this;
+        if (!inThrottle) {
+            func.apply(context, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    }
+}
+
+function initializeChatState() {
+    chatState.queries?.forEach(query => observers.intersection?.unobserve(query));
+    chatState.responses?.forEach(response => observers.intersection?.unobserve(response));
+
+    chatState.queries = [];
+    chatState.responses = [];
+    chatState.currentVisibleResponseIndex = -1;
+    chatState.isCurrentQueryVisible = false;
+    elementVisibility = new WeakMap();
+}
+
+function reloadChatState() {
+    initializeChatState();
+
+    chatState.queries = Array.from(document.querySelectorAll('user-query'));
+    chatState.responses = Array.from(document.querySelectorAll('model-response'));
+    chatState.queries.forEach(query => observers.intersection.observe(query));
+    chatState.responses.forEach(response => observers.intersection.observe(response));
+}
+
+function processConversationNode(node) {
+    if (node.nodeType !== 1 || !node.matches('.conversation-container')) return;
+
+    const query = node.querySelector('user-query');
+    const response = node.querySelector('model-response');
+    if (query && response) {
+        if (!chatState.queries.includes(query)) {
+            chatState.queries.push(query);
+            chatState.responses.push(response);
+            observers.intersection.observe(query);
+            observers.intersection.observe(response);
+        }
+    }
+}
+
 function disconnectObservers() {
-    if (observers.resize) observers.mutation.disconnect();
-    if (observers.intersection) observers.mutation.disconnect();
-    if (observers.mutation) observers.mutation.disconnect();
-    observers.resize = null;
+    observers.intersection?.disconnect();
     observers.intersection = null;
+
+    observers.mutation?.disconnect();
     observers.mutation = null;
 }
 
@@ -38,6 +92,14 @@ function createScrollButton(iconName, titleText, onClickHandler) {
     return button;
 }
 
+function createCountDisplay(targetContainer) {
+    if (components.countDisplay) return;
+    const countDisplay = document.createElement('div');
+    countDisplay.id = 'count-display';
+    targetContainer.appendChild(countDisplay);
+    components.countDisplay = countDisplay;
+}
+
 function createAndPlaceScrollButton() {
     if (components.scrollButton) return;
     const targetContainer = document.querySelector('.input-area-container');
@@ -49,155 +111,173 @@ function createAndPlaceScrollButton() {
     buttonContainer.className = 'scroll-button-container';
 
     const upButton = createScrollButton('arrow_upward', 'scroll to the previous question', () => {
-        const visibleResponses = cachedResponses.filter(resp => {
-            const rect = resp.getBoundingClientRect();
-            return rect.top < window.innerHeight && rect.bottom >= 0;
-        });
-        if (visibleResponses.length > 0) {
-            visibleResponses.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
-            const topMostVisibleAnswer = visibleResponses[0];
-            const index = cachedResponses.indexOf(topMostVisibleAnswer);
-            if (index > -1 && cachedQueries[index]) {
-                isScrollingViaButton = true;
-                cachedQueries[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-
-            setTimeout(() => {
-                isScrollingViaButton = false;
-                updateTopBarVisibility();
-            }, 500);
+        const actualFirstQuery = document.querySelector('.conversation-container user-query');
+        if (!actualFirstQuery) return;
+        if (actualFirstQuery && actualFirstQuery !== chatState.queries?.at(0)) {
+            reloadChatState();
         }
+
+        const targetIndex = chatState.currentVisibleResponseIndex - (chatState.isCurrentQueryVisible ? 1 : 0);
+        if (targetIndex >= 0) {
+            chatState.queries[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            return;
+        }
+        setSideDisplayVisibility(false);
+        setTimeout(() => {
+            updateSideDisplay();
+        }, 1100);
     });
 
     const downButton = createScrollButton('arrow_downward', 'scroll to the next question', () => {
-        const currentAnswer = [...cachedResponses].find(q => q.getBoundingClientRect().bottom > topBarHeight);
-        const currentIndex = currentAnswer ? cachedResponses.indexOf(currentAnswer) : -1;
-        const nextIndex = currentIndex + 1;
-        if (nextIndex < cachedQueries.length) {
-            isScrollingViaButton = true;
-            cachedQueries[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
-            setTimeout(() => {
-                isScrollingViaButton = false;
-                updateTopBarVisibility();
-            }, 500);
-        } else {
-            cachedResponses.at(-1).scrollIntoView({ behavior: 'smooth', block: 'end' });
+        const actualFirstQuery = document.querySelector('.conversation-container user-query');
+        if (!actualFirstQuery) return;
+        if (actualFirstQuery && actualFirstQuery !== chatState.queries?.at(0)) {
+            reloadChatState();
         }
+
+        const targetIndex = chatState.currentVisibleResponseIndex + 1;
+        if (targetIndex < chatState.queries.length) {
+            chatState.queries[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        else {
+            chatState.responses.at(-1).scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+        setSideDisplayVisibility(false);
+        setTimeout(() => {
+            updateSideDisplay();
+        }, 1100);
     });
 
     buttonContainer.appendChild(upButton);
     buttonContainer.appendChild(downButton);
     targetContainer.appendChild(buttonContainer);
+    components.scrollButton = buttonContainer;
+
+    if (DEBUG_MODE) {
+        createCountDisplay(targetContainer);
+    }
+
+    const refreshButton = createScrollButton('refresh', 'refresh', () => {
+        updateSideDisplay();
+    });
+    buttonContainer.prepend(refreshButton);
 }
 
-function createTopBarDisplay() {
-    if (components.topBarQuestion) return;
-    const topBar = document.querySelector('.desktop-ogb-buffer');
-    if (!topBar) return;
-    const display = document.createElement('div');
-    display.id = 'top-bar-question-display';
+function createSideDisplay() {
+    let display = document.getElementById('side-question-display');
+    if (display) return;
+
+    display = document.createElement('div');
+    display.id = 'side-question-display';
     const textSpan = document.createElement('span');
-    textSpan.className = 'text-span';
+    textSpan.className = 'question-text';
     display.appendChild(textSpan);
+    let footer = document.createElement('div')
+    footer.className = 'side-panel-footer'
+    const toggleButton = document.createElement('button');
+    toggleButton.className = 'panel-toggle-btn';
+    const toggleIcon = document.createElement('span');
+    toggleIcon.className = 'material-symbols-outlined';
+    toggleIcon.innerText = 'expand_less';
+    toggleButton.appendChild(toggleIcon);
+    footer.appendChild(toggleButton);
+    display.appendChild(footer);
 
-    topBar.prepend(display);
-    components.topBarQuestion = display;
-    components.topBarTextSpan = textSpan;
+    toggleButton.onclick = () => {
+        isPanelCollapsed = !isPanelCollapsed;
+
+        if (isPanelCollapsed) {
+            display.classList.add('collapsed');
+            toggleIcon.innerText = 'expand_more';
+            toggleButton.title = "expand";
+        } else {
+            display.classList.remove('collapsed');
+            toggleIcon.innerText = 'expand_less';
+            toggleButton.title = "collapse";
+        }
+    };
+
+    document.body.appendChild(display);
+    components.sideQuestionDisplay = display;
+    components.sideQuestionTextSpan = textSpan;
 }
 
-function syncTopBarPosition() {
-    const referenceElement = document.querySelector('.response-container-content');
-    if (components.topBarQuestion && referenceElement) {
-        const rect = referenceElement.getBoundingClientRect();
-        components.topBarQuestion.style.width = `${rect.width}px`;
-        components.topBarQuestion.style.left = `${rect.left}px`;
+function setSideDisplayVisibility(isVisible) {
+    if (isVisible) {
+        components.sideQuestionDisplay?.classList.add('visible');
+    } else {
+        components.sideQuestionDisplay?.classList.remove('visible');
     }
 }
 
-function updateTopBarVisibility() {
-    if (!components.topBarQuestion) return;
-    if (isScrollingViaButton) {
-        components.topBarQuestion.classList.remove('visible');
+function updateSideDisplay() {
+    if (!components.sideQuestionDisplay) return;
+
+    let topMostVisibleResponseIndex = -1;
+    for (let i = 0; i < chatState.responses.length; i++) {
+        const rect = chatState.responses[i].getBoundingClientRect();
+        if (rect.bottom > topBarHeight) {
+            topMostVisibleResponseIndex = i;
+            break;
+        }
+    }
+
+    if (topMostVisibleResponseIndex === -1 && chatState.responses.length > 0) {
+        topMostVisibleResponseIndex = chatState.responses.length - 1;
+    }
+
+    chatState.currentVisibleResponseIndex = topMostVisibleResponseIndex;
+    if (topMostVisibleResponseIndex === -1) {
+        setSideDisplayVisibility(false);
         return;
     }
-    let textToShow = null;
-    for (let i = cachedQueries.length - 1; i >= 0; i--) {
-        const question = cachedQueries[i];
-        const answer = cachedResponses[i];
-        if (question && answer) {
-            const isQuestionVisible = elementVisibility.get(question);
-            const isAnswerVisible = elementVisibility.get(answer);
 
-            if (isQuestionVisible === false && isAnswerVisible === true) {
-                const answerRect = answer.getBoundingClientRect();
+    const currentQuestion = chatState.queries[topMostVisibleResponseIndex];
+    const isQuestionVisible = elementVisibility.get(currentQuestion);
+    chatState.isCurrentQueryVisible = isQuestionVisible;
+    if (!isQuestionVisible) {
+        const originalText = currentQuestion.querySelector('.query-text')?.innerText || '';
+        const textToShow = originalText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
 
-                const footerHeight = 32;
-                const threshold = footerHeight + topBarHeight;
-
-                const isAnswerBarelyVisible = answerRect.bottom < threshold;
-                if (isAnswerBarelyVisible) {
-                    continue;
-                }
-
-                const originalText = question.querySelector('.query-text')?.innerText || '';
-                textToShow = originalText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-                break;
-            }
-        }
+        components.sideQuestionTextSpan.innerText = textToShow;
     }
-    if (textToShow) {
-        if (components.topBarTextSpan) {
-            components.topBarTextSpan.innerText = textToShow;
-            components.title = textToShow;
-        }
-        components.topBarQuestion.classList.add('visible');
-    } else {
-        components.topBarQuestion.classList.remove('visible');
+    setSideDisplayVisibility(!isQuestionVisible);
+    if (DEBUG_MODE && components.countDisplay) {
+        components.countDisplay.innerText = `${topMostVisibleResponseIndex + 1} / ${chatState.responses.length}`;
     }
 }
 
+const throttledUpdateSideDisplay = throttle(updateSideDisplay, 100);
 
 function initializeFeatures() {
-    cachedQueries = Array.from(document.querySelectorAll('user-query'));
-    cachedResponses = Array.from(document.querySelectorAll('model-response'));
-
     createAndPlaceScrollButton();
-    createTopBarDisplay();
+    createSideDisplay();
 
     disconnectObservers();
 
-    observers.resize = new ResizeObserver(syncTopBarPosition);
     const chatHistory = document.getElementById('chat-history');
-    if (chatHistory) {
-        observers.resize.observe(chatHistory);
-    }
 
     observers.intersection = new IntersectionObserver((entries) => {
         entries.forEach(entry => elementVisibility.set(entry.target, entry.isIntersecting));
-        updateTopBarVisibility();
+        throttledUpdateSideDisplay();
     }, { root: document.querySelector('main'), threshold: 0 });
-
-    [...cachedQueries, ...cachedResponses].forEach(el => observers.intersection.observe(el));
 
     observers.mutation = new MutationObserver((mutations) => {
         mutations.forEach(mutation => {
-            mutation.addedNodes.forEach(node => {
-                if (node.matches && node.matches('.conversation-container')) {
-                    const query = node.querySelector('user-query');
-                    const response = node.querySelector('model-response');
-                    if (query) {
-                        cachedQueries.push(query);
-                        observers.intersection.observe(query)
-                    }
-                    if (response) {
-                        cachedResponses.push(response);
-                        observers.intersection.observe(response);
-                    }
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    processConversationNode(node);
                 }
-            });
+            }
         });
     });
-    observers.mutation.observe(document.querySelector('#chat-history'), { childList: true });
+    if (chatHistory) {
+        const conversationList = chatHistory.querySelector('infinite-scroller')
+        Array.from(conversationList.children).forEach(node => processConversationNode(node));
+        observers.mutation.observe(conversationList, { childList: true });
+    }
+    isInitialized = true;
 }
 
 
@@ -205,7 +285,7 @@ function hasMandatoryElements(selectors) {
     return selectors.every(selector => document.querySelector(selector));
 }
 
-async function startExtension() {
+async function launchExtension() {
     if (isInitialized) return;
 
     const CHAT_CONTAINER_SELECTOR = ['.desktop-ogb-buffer', '#chat-history user-query', '.input-area-container'];
@@ -223,56 +303,53 @@ async function startExtension() {
             subtree: true
         });
     }
-    isInitialized = true;
 }
 
 function disableExtension() {
-    components.topBarQuestion?.remove();
+    components.sideQuestionDisplay?.remove();
     components.scrollButton?.remove();
-    components.topBarQuestion = null;
+    if (DEBUG_MODE) {
+        components.countDisplay?.remove();
+        components.countDisplay = null;
+    }
+    components.sideQuestionDisplay = null;
     components.scrollButton = null;
+    components.topBarQuestion = null;
+    components.sideQuestionTextSpan = null;
+    components.topBarTextSpan = null;
 
     disconnectObservers();
+    initializeChatState();
 
     isInitialized = false;
 }
 
-function handleNavigation() {
-    chrome.storage.sync.get('extensionEnabled', (data) => {
+async function initializeExtension() {
+    chrome.storage.sync.get(['extensionEnabled']).then((data) => {
         if (data.extensionEnabled !== false) {
             disableExtension();
-            startExtension();
+            launchExtension();
         }
     });
 }
 
 async function main() {
+    initializeExtension();
 
-    window.addEventListener('popstate', handleNavigation); // 브라우저 뒤로가기/앞으로가기 버튼
-    //window.addEventListener('pushstate', handleNavigation); // Gemini 내부 링크 클릭
-
+    window.addEventListener('popstate', initializeExtension); // 브라우저 뒤로가기/앞으로가기 버튼
     window.navigation.addEventListener("navigate", (event) => {
-        handleNavigation();
-    });
-
-    chrome.storage.sync.get('extensionEnabled', (data) => {
-        if (data.extensionEnabled !== false) {
-            startExtension();
-        }
+        initializeExtension();
     });
 
     chrome.storage.onChanged.addListener((changes) => {
         if (changes.extensionEnabled) {
             if (changes.extensionEnabled.newValue === true) {
-                startExtension();
+                launchExtension();
             } else {
                 disableExtension();
             }
         }
     });
-
-    const data = await chrome.storage.sync.get('extensionEnabled');
-    if (data.extensionEnabled === false) return;
 }
 
 main();

@@ -23,7 +23,6 @@
     cursor: pointer;
     width: 36px;
     height: 36px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     transition: background-color 0.2s;
     display: flex;
     justify-content: center;
@@ -58,45 +57,92 @@ body.dark-theme .chat-scroll-btn:disabled {
     opacity: 0.4;
 }
 
-/* 상단 바에 추가될 질문 표시 영역 스타일 */
-#top-bar-question-display {
-    padding: 10px 24px;
+/* side question display*/
+#side-question-display {
+    position: fixed;
+    top: 70px;
+    right: 40px;
+    width: 300px;
+    max-height: 480px;
+
+    padding: 16px 20px;
+    border-radius: 24px 4px 24px 24px;
+
+    background-color: #e9eef6;
+    color: #1f1f1f;
+    font-size: 16px;
+
+    line-height: 1.6;
+
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    opacity: 0;
+    visibility: hidden;
+
+    transform: translateX(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+    z-index: 900;
+
+    overflow-y: auto;
+}
+
+#side-question-display.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+}
+
+#side-question-display .question-text {
+    word-break: break-word;
+}
+
+#side-question-display.collapsed {
+    width: auto;
+    min-width: 40px;
+    gap: 0;
+}
+
+#side-question-display.collapsed .question-text {
+    display: none;
+}
+
+body.dark-theme #side-question-display {
+    background-color: #282a2c;
+    color: #e3e3e3;
+}
+
+.side-panel-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.panel-toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
-    background-color: #e9eef6;
-    color: #3c4043;
-    font-size: 16px;
-    border-radius: 24px;
+    justify-content: center;
+    color: #5f6368;
+    transition: background-color 0.2s;
+}
 
+.panel-toggle-btn:hover {
+    background-color: #f1f3f4;
+}
+
+.panel-toggle-btn .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined', sans-serif;
+    font-size: 20px;
+}
+
+#count-display {
     position: absolute;
-    box-sizing: border-box;
-
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-}
-
-#top-bar-question-display.visible {
-    opacity: 1;
-    height: 44px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-}
-
-#top-bar-question-display .text-span {
-    width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-body.dark-theme #top-bar-question-display {
-    background-color: #333537;
-    color: #e8eaed;
+    font-size: 14px;
+    color: #9a9b9c;
+    right: 60px;
+    bottom: 12px;
 }
