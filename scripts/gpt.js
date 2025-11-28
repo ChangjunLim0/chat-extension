@@ -318,9 +318,7 @@ function disableExtension() {
     }
     components.sideQuestionDisplay = null;
     components.scrollButton = null;
-    components.topBarQuestion = null;
     components.sideQuestionTextSpan = null;
-    components.topBarTextSpan = null;
 
     disconnectObservers();
     initializeChatState();
