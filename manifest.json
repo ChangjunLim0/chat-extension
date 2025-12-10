@@ -1,0 +1,51 @@
+{
+    "manifest_version": 3,
+    "name": "Foxtail - make AI smooth",
+    "description": "Extension for improving chat AI services",
+    "version": "0.1.0",
+    "permissions": [
+        "storage"
+    ],
+    "icons": {
+        "16": "images/favicon-16.png",
+        "32": "images/favicon-32.png"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://gemini.google.com/*"
+            ],
+            "js": [
+                "scripts/gemini.js"
+            ],
+            "css": [
+                "styles/gemini.css"
+            ]
+        },
+        {
+            "matches": [
+                "https://chatgpt.com/*"
+            ],
+            "js": [
+                "scripts/gpt.js"
+            ],
+            "css": [
+                "styles/gpt.css"
+            ]
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "fonts/*.woff2"
+            ],
+            "matches": [
+                "https://gemini.google.com/*",
+                "https://chatgpt.com/*"
+            ]
+        }
+    ],
+    "action": {
+        "default_popup": "popup/popup.html"
+    }
+}
